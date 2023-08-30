@@ -152,7 +152,7 @@ public class PlayerConroller : MonoBehaviour
         {
             float leftBoundX = cl.bounds.center.x - cl.bounds.size.x / 2;
             float distance = topLeftCorner.HitPointX - leftBoundX;
-            distance += 0.001f; // add a small value to avoid collide on edge
+            distance += 0.001f; // add a small value to avoid colliding on edge
             tf.Translate(distance * Vector2.right);
         }
         // if hit head on right corner & not moving right -> push left a little bit
@@ -160,7 +160,7 @@ public class PlayerConroller : MonoBehaviour
         {
             float rightBoundX = cl.bounds.center.x + cl.bounds.size.x / 2;
             float distance = rightBoundX - topRightCorner.HitPointX;
-            distance += 0.001f; // add a small value to avoid collide on edge
+            distance += 0.001f; // add a small value to avoid colliding on edge
             tf.Translate(distance * Vector2.left);
         }
     }
