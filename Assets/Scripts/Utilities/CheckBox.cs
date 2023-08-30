@@ -28,6 +28,10 @@ public class CheckBox : MonoBehaviour
     [SerializeField] private Vector2 lastRayOffset = Vector2.zero;
     public Vector2 Center => transform.position;
     public Vector2 Size => size;
+#if UNITY_EDITOR
+    [Header("Inspector Functions")]
+    public LayerMask Layer;
+#endif
 
 #region Scene GUI
 
@@ -180,6 +184,8 @@ public class CheckBoxEditor : Editor
     {
         DrawDefaultInspector();
         CheckBox checkbox = (CheckBox)target;
+        if (GUILayout.Button("Detect"))
+            Debug.Log(checkbox.Detect(checkbox.Layer), this);
         if (GUILayout.Button("Normalize Direction"))
             checkbox.NormalizeDir();
     }
