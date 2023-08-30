@@ -7,6 +7,7 @@ public class PlayerConroller : MonoBehaviour
     [Header("Components")]
     [SerializeField] private Transform tf;
     [SerializeField] private Rigidbody2D rb;
+    [SerializeField] private Collider2D cl;
     private float _deltaTime;
     private Vector2 _velocity;
 
@@ -16,12 +17,19 @@ public class PlayerConroller : MonoBehaviour
 
     private void Update()
     {
-        _deltaTime = Time.deltaTime;
-        detect.DetectAll();
-        timer.Update(_deltaTime);
-        _velocity = rb.velocity;
+        CalculateJump();
+    }
 
-        if (detect.down)
+    private void FixedUpdate()
+    {
+        _deltaTime = Time.fixedDeltaTime;
+        detect.DetectAll(groundLayer);
+        topLeftCorner.Detect(groundLayer, tf.position);
+        topRightCorner.Detect(groundLayer, tf.position);
+        timer.Update(_deltaTime);
+        // _velocity = rb.velocity;
+
+        if (detect.Down)
         {
             _jumpCutting = false;
             if (!_lastHitDown)
@@ -31,23 +39,24 @@ public class PlayerConroller : MonoBehaviour
         if (Input.JumpDown)
             timer.JumpBuffer = jumpBufferTime;
 
-        if (detect.down)
+        if (detect.Down)
             timer.LastOnGround = coyoteTime;
 
         _atJumpApex = _jumping && Mathf.Abs(_velocity.y) <= jumpApexSpeedThreshold;
+
+        CornerCorrect();
 
         /* Horizontal Move */
         CalculateRun();
 
         /* Vertical Move */
         SetGravity();
-        CalculateJump();
 
-        // RestrictVelocity();
+        RestrictVelocity();
         rb.velocity = _velocity;
     }
 
-    void LateUpdate() => _lastHitDown = detect.down;
+    void LateUpdate() => _lastHitDown = detect.Down;
 
 #endregion
 
@@ -56,23 +65,61 @@ public class PlayerConroller : MonoBehaviour
     [System.Serializable]
     private struct Detect
     {
-        [SerializeField] private LayerMask groundLayer;
         [SerializeField] private CheckBox upCheck, downCheck, leftCheck, rightCheck;
-        public bool up, down, left, right;
+        private bool _up, _down, _left, _right;
+        public readonly bool Up => _up;
+        public readonly bool Down => _down;
+        public readonly bool Left => _left;
+        public readonly bool Right => _right;
 
-        public void DetectAll()
+        public void DetectAll(LayerMask layer)
         {
-            up    = upCheck   .Detect(groundLayer);
-            down  = downCheck .Detect(groundLayer);
-            left  = leftCheck .Detect(groundLayer);
-            right = rightCheck.Detect(groundLayer);
+            _up    = upCheck   .Detect(layer);
+            _down  = downCheck .Detect(layer);
+            _left  = leftCheck .Detect(layer);
+            _right = rightCheck.Detect(layer);
+        }
+    }
+
+    [System.Serializable]
+    private struct CornerDetect
+    {
+        [SerializeField] private CheckBox outer, inner, hitRay;
+        private bool _detected;
+        private float _hitPointX;
+        public readonly bool Detected => _detected;
+        public readonly float HitPointX => _hitPointX;
+
+        public void Detect(LayerMask layer, Vector2 defaultPos)
+        {
+            _detected = outer.Detect(layer) && !inner.Detect(layer);
+            if (_detected)
+                _hitPointX = hitRay.GetHitPoint(layer, defaultPos).x;
         }
     }
 
     [Header("Detects")]
+    [SerializeField] private LayerMask groundLayer;
     [SerializeField] private Detect detect;
-
+    [SerializeField] private CornerDetect topLeftCorner, topRightCorner;
     private bool _lastHitDown;
+
+    private void CornerCorrect()
+    {
+        // if hit head on corner -> push forward a little bit
+        if (topLeftCorner.Detected && Input.RawH >= 0 && _velocity.y > 0)
+        {
+            float leftBoundX = cl.bounds.center.x - cl.bounds.size.x / 2;
+            float distance = topLeftCorner.HitPointX - leftBoundX;
+            tf.Translate(distance * Vector2.right);
+        }
+        if (topRightCorner.Detected && Input.RawH <= 0 && _velocity.y > 0)
+        {
+            float rightBoundX = cl.bounds.center.x + cl.bounds.size.x / 2;
+            float distance = topRightCorner.HitPointX - rightBoundX;
+            tf.Translate(distance * Vector2.right);
+        }
+    }
 
 #endregion
 
@@ -125,13 +172,12 @@ public class PlayerConroller : MonoBehaviour
 #region Gravity
 
     [Header("Gravity")]
-    [SerializeField] private Vector2 gravity = new(0f, 80f);
-    private const float gravityScale = 1;
+    [SerializeField] private Vector2 gravity = new(0f, -80f);
     [SerializeField] private float maxFallSpeed = 30f;
 
     private void SetGravity()
     {
-        float scale = gravityScale;
+        float scale = 1;
 
         if (_atJumpApex)
             scale *= jumpApexGravityMult;
@@ -139,7 +185,7 @@ public class PlayerConroller : MonoBehaviour
             scale *= jumpCutGravityMult;
 
         // v = v_0 + a * t
-        float v = _velocity.y - gravity.y * scale * _deltaTime;
+        float v = _velocity.y + gravity.y * scale * _deltaTime;
 
         v = Mathf.Max(v, -maxFallSpeed);
 
@@ -166,8 +212,8 @@ public class PlayerConroller : MonoBehaviour
     {
         float v = _velocity.y;
 
-        if (!detect.up &&
-            ((detect.down && timer.JumpBuffer > 0) ||
+        if ((!detect.Up || topLeftCorner.Detected || topRightCorner.Detected) &&
+            ((detect.Down && timer.JumpBuffer > 0) ||
             (Input.JumpDown && !_jumping && timer.LastOnGround > 0)))
         {
             v = jumpSpeed;
@@ -176,7 +222,7 @@ public class PlayerConroller : MonoBehaviour
         }
 
         // jump cut if release jump button
-        if (!detect.down && Input.JumpUp && !_jumpCutting && _jumping)
+        if (!detect.Down && Input.JumpUp && !_jumpCutting && _jumping)
         {
             _jumpCutting = true;
             v *= jumpCutSpeedMult;
@@ -189,9 +235,9 @@ public class PlayerConroller : MonoBehaviour
 
     private void RestrictVelocity()
     {
-        if ((_velocity.x > 0 && detect.right) || (_velocity.x < 0 && detect.left))
+        if ((_velocity.x > 0 && detect.Right) || (_velocity.x < 0 && detect.Left))
             _velocity.x = 0;
-        if ((_velocity.y > 0 && detect.up) || (_velocity.y < 0 && detect.down))
+        if ((_velocity.y > 0 && detect.Up && !topLeftCorner.Detected && !topRightCorner.Detected) || (_velocity.y < 0 && detect.Down))
             _velocity.y = 0;
     }
 }
