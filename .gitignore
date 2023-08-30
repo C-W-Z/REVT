@@ -77,8 +77,5 @@ crashlytics-build.properties
 /[Aa]ssets/[Tt]ext[Mm]esh [Pp]ro/*
 /[Aa]ssets/[Tt]ext[Mm]esh [Pp]ro/*/*
 
-#URP
-/[Aa]ssets/[Ss]ettings/[Ss]cenes/
-
 # VSCode
 /.vscode/
