@@ -176,7 +176,7 @@ MonoBehaviour:
   noCornerCorrectTime: 0.5
   maxRunSpeed: 13
   runAcceleration: 90
-  runDecceleration: 150
+  runDecceleration: 90
   jumpApexBonusMoveSpeed: 2
   gravity: {x: 0, y: -80}
   maxFallSpeed: 30
@@ -185,7 +185,7 @@ MonoBehaviour:
   jumpCutGravityMult: 2
   jumpBufferTime: 0.1
   coyoteTime: 0.1
-  jumpApexSpeedThreshold: 0.5
+  jumpApexSpeedThreshold: 3
   jumpApexGravityMult: 0.5
 --- !u!61 &29055519
 BoxCollider2D:

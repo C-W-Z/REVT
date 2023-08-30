@@ -15,8 +15,10 @@ public class PlayerConroller : MonoBehaviour
 
 #region MonoBehaviour
 
+    /* Events of button press down should be detected in Update() */
     private void Update()
     {
+        /* Update States */
         if (Input.RawH < 0)
             timer.SetNoLeftCornerCorrect(noCornerCorrectTime);
         if (Input.RawH > 0)
@@ -27,12 +29,16 @@ public class PlayerConroller : MonoBehaviour
         CalculateJump();
     }
 
+    // CheckBox detections & physic calculations will work better in FixedUpdate()
     private void FixedUpdate()
     {
+        /* Update States */
         _deltaTime = Time.fixedDeltaTime;
+
         detect.DetectAll(groundLayer);
         topLeftCorner.Detect(groundLayer, tf.position);
         topRightCorner.Detect(groundLayer, tf.position);
+
         timer.Update(_deltaTime);
 
         if (detect.Down)
@@ -48,11 +54,8 @@ public class PlayerConroller : MonoBehaviour
 
         CornerCorrect();
 
-        /* Horizontal Move */
+        CalculateGravity(); // can be overwrite, so calculate first
         CalculateRun();
-
-        /* Vertical Move */
-        SetGravity();
 
         /* Apply Move to Rigidbody*/
         RestrictVelocity();
@@ -167,7 +170,7 @@ public class PlayerConroller : MonoBehaviour
 
     [Header("Run")]
     [SerializeField] private float maxRunSpeed = 13f;
-    [SerializeField] private float runAcceleration = 90f, runDecceleration = 150f;
+    [SerializeField] private float runAcceleration = 90f, runDecceleration = 90f;
     [SerializeField] private float jumpApexBonusMoveSpeed = 2f;
 
     private void CalculateRun()
@@ -195,10 +198,11 @@ public class PlayerConroller : MonoBehaviour
 #region Gravity
 
     [Header("Gravity")]
-    [SerializeField] private Vector2 gravity = new(0f, -80f);
+    [SerializeField] private float gravity = 80f;
+    private Vector2 gravityDir = Vector2.down;
     [SerializeField] private float maxFallSpeed = 30f;
 
-    private void SetGravity()
+    private void CalculateGravity()
     {
         float scale = 1;
 
@@ -207,12 +211,17 @@ public class PlayerConroller : MonoBehaviour
         else if (_jumpCutting)
             scale *= jumpCutGravityMult;
 
+        Debug.Assert(gravityDir.magnitude == 1f, $"gravityDir: {gravityDir} has wrong magnitude: {gravityDir.magnitude}", this);
+
         // v = v_0 + a * t
-        float v = _velocity.y + gravity.y * scale * _deltaTime;
+        Vector2 v = _velocity + gravity * scale * _deltaTime * gravityDir;
 
-        v = Mathf.Max(v, -maxFallSpeed);
+        if (gravityDir.x != 0)
+            v.x = Mathf.Max(v.x, maxFallSpeed * gravityDir.x);
+        else
+            v.y = Mathf.Max(v.y, maxFallSpeed * gravityDir.y);
 
-        _velocity.y = v;
+        _velocity = v;
     }
 
 #endregion
@@ -227,7 +236,7 @@ public class PlayerConroller : MonoBehaviour
     [SerializeField] private float jumpBufferTime = 0.1f;
     [SerializeField] private float coyoteTime = 0.1f;
     private bool _jumping = false;
-    [SerializeField] private float jumpApexSpeedThreshold = 0.5f;
+    [SerializeField] private float jumpApexSpeedThreshold = 3f;
     [SerializeField] private float jumpApexGravityMult = 0.5f;
     private bool _atJumpApex = false;
 
@@ -236,8 +245,8 @@ public class PlayerConroller : MonoBehaviour
         float v = _velocity.y;
 
         if ((!detect.Up || topLeftCorner.Detected || topRightCorner.Detected) &&
-            ((detect.Down && timer.HasJumpBuffer) ||
-            (Input.JumpDown && !_jumping && timer.CanCoyote)))
+            ((detect.Down && (timer.HasJumpBuffer || Input.JumpDown)) ||
+             (Input.JumpDown && !_jumping && timer.CanCoyote)))
         {
             v = jumpSpeed;
             _jumping = true;
@@ -245,7 +254,7 @@ public class PlayerConroller : MonoBehaviour
         }
 
         // jump cut if release jump button
-        if (!detect.Down && Input.JumpUp && !_jumpCutting && _jumping)
+        if (!detect.Down && Input.JumpUp && !_jumpCutting && _jumping && _velocity.y > 0)
         {
             _jumpCutting = true;
             v *= jumpCutSpeedMult;
