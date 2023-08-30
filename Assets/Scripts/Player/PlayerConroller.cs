@@ -18,11 +18,11 @@ public class PlayerConroller : MonoBehaviour
     private void Update()
     {
         if (Input.RawH < 0)
-            timer.LastPressLeft = noCornerCorrectTime;
+            timer.SetNoLeftCornerCorrect(noCornerCorrectTime);
         if (Input.RawH > 0)
-            timer.LastPressRight = noCornerCorrectTime;
+            timer.SetNoRightCornerCorrect(noCornerCorrectTime);
         if (Input.JumpDown)
-            timer.LastPressJump = jumpBufferTime;
+            timer.SetJumpBuffer(jumpBufferTime);
 
         CalculateJump();
     }
@@ -40,10 +40,9 @@ public class PlayerConroller : MonoBehaviour
             _jumpCutting = false;
             if (!_lastHitDown)
                 _jumping = false;
-        }
 
-        if (detect.Down)
-            timer.LastOnGround = coyoteTime;
+            timer.SetCoyote(coyoteTime);
+        }
 
         _atJumpApex = _jumping && Mathf.Abs(_velocity.y) <= jumpApexSpeedThreshold;
 
@@ -55,6 +54,7 @@ public class PlayerConroller : MonoBehaviour
         /* Vertical Move */
         SetGravity();
 
+        /* Apply Move to Rigidbody*/
         RestrictVelocity();
         rb.velocity = _velocity;
     }
@@ -68,17 +68,29 @@ public class PlayerConroller : MonoBehaviour
     [System.Serializable]
     private struct Timer
     {
-        public float LastPressLeft;
-        public float LastPressRight;
-        public float LastPressJump;
-        public float LastOnGround;
+        private float _noLeftCornerCorrect; // LastPressLeft
+        private float _noRightCornerCorrect; // LastPressRight
+        private float _jumpBuffer; // LastPressJump
+        private float _coyote;  // LastOnGround
+        public readonly bool CanLeftCornerCorrect => _noLeftCornerCorrect < 0;
+        public readonly bool CanRightCornerCorrect => _noRightCornerCorrect < 0;
+        public readonly bool HasJumpBuffer => _jumpBuffer > 0;
+        public readonly bool CanCoyote => _coyote > 0;
         public void Update(float deltaTime)
         {
-            LastPressLeft  -= deltaTime;
-            LastPressRight -= deltaTime;
-            LastPressJump  -= deltaTime;
-            LastOnGround   -= deltaTime;
+            _noLeftCornerCorrect  -= deltaTime;
+            _noRightCornerCorrect -= deltaTime;
+            _jumpBuffer           -= deltaTime;
+            _coyote               -= deltaTime;
         }
+        public void SetNoLeftCornerCorrect(float time)
+            => _noLeftCornerCorrect = time;
+        public void SetNoRightCornerCorrect(float time)
+            => _noRightCornerCorrect = time;
+        public void SetJumpBuffer(float time)
+            => _jumpBuffer = time;
+        public void SetCoyote(float time)
+            => _coyote = time;
     }
 
     private Timer timer;
@@ -126,25 +138,26 @@ public class PlayerConroller : MonoBehaviour
     [Header("Detects")]
     [SerializeField] private LayerMask groundLayer;
     [SerializeField] private Detect detect;
-    [SerializeField] private CornerDetect topLeftCorner, topRightCorner;
-    [SerializeField, Tooltip("No corner correct if the time after press left/right within this value")]
-    private float noCornerCorrectTime = 0.5f;
     private bool _lastHitDown;
+    [SerializeField] private CornerDetect topLeftCorner, topRightCorner;
+    [SerializeField, Tooltip("No left/right corner correct if the time after press left/right within this value")] private float noCornerCorrectTime = 0.5f;
 
     private void CornerCorrect()
     {
         // if hit head on corner -> push forward a little bit
-        if (topLeftCorner.Detected && timer.LastPressLeft < 0 && _velocity.y > 0)
+        if (topLeftCorner.Detected && timer.CanLeftCornerCorrect && _velocity.y > 0)
         {
             float leftBoundX = cl.bounds.center.x - cl.bounds.size.x / 2;
             float distance = topLeftCorner.HitPointX - leftBoundX;
+            distance += 0.001f; // add a small value to avoid collide on edge
             tf.Translate(distance * Vector2.right);
         }
-        if (topRightCorner.Detected && timer.LastPressRight < 0 && _velocity.y > 0)
+        if (topRightCorner.Detected && timer.CanRightCornerCorrect && _velocity.y > 0)
         {
             float rightBoundX = cl.bounds.center.x + cl.bounds.size.x / 2;
-            float distance = topRightCorner.HitPointX - rightBoundX;
-            tf.Translate(distance * Vector2.right);
+            float distance = rightBoundX - topRightCorner.HitPointX;
+            distance += 0.001f; // add a small value to avoid collide on edge
+            tf.Translate(distance * Vector2.left);
         }
     }
 
@@ -223,8 +236,8 @@ public class PlayerConroller : MonoBehaviour
         float v = _velocity.y;
 
         if ((!detect.Up || topLeftCorner.Detected || topRightCorner.Detected) &&
-            ((detect.Down && timer.LastPressJump > 0) ||
-            (Input.JumpDown && !_jumping && timer.LastOnGround > 0)))
+            ((detect.Down && timer.HasJumpBuffer) ||
+            (Input.JumpDown && !_jumping && timer.CanCoyote)))
         {
             v = jumpSpeed;
             _jumping = true;

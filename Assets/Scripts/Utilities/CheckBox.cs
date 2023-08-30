@@ -65,6 +65,8 @@ public class CheckBox : MonoBehaviour
 
 #endregion
 
+#region Functions
+
     public bool Detect(LayerMask layer)
     {
         switch (type)
@@ -80,7 +82,7 @@ public class CheckBox : MonoBehaviour
                 // check hit if only one ray
                 if (rayCount == 1)
                     return Physics2D.Raycast(transform.position, direction, distance, layer);
-                // check if any hit if nultiple rays
+                // check if any hit if multiple rays
                 for (int i = 0; i <= rayCount-1; i++)
                 {
                     float t = (float)i / (rayCount-1);
@@ -108,7 +110,7 @@ public class CheckBox : MonoBehaviour
         }
         else
         {
-            // get any hit point if nultiple rays
+            // get any hit point if multiple rays
             for (int i = 0; i <= rayCount-1; i++)
             {
                 float t = (float)i / (rayCount-1);
@@ -120,6 +122,7 @@ public class CheckBox : MonoBehaviour
         }
         return defaultPos;
     }
+#endregion
 
 #region Other Methods
 
@@ -184,7 +187,7 @@ public class CheckBoxEditor : Editor
     {
         DrawDefaultInspector();
         CheckBox checkbox = (CheckBox)target;
-        if (GUILayout.Button("Detect"))
+        if (GUILayout.Button("Detect Layer"))
             Debug.Log(checkbox.Detect(checkbox.Layer), this);
         if (GUILayout.Button("Normalize Direction"))
             checkbox.NormalizeDir();
