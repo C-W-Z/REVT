@@ -44,7 +44,7 @@ public class PlayerConroller : MonoBehaviour
         if (detect.Down)
         {
             _jumpCutting = false;
-            if (!_lastHitDown)
+            if (!_lastDetectDown)
                 _jumping = false;
 
             timer.SetCoyote(coyoteTime);
@@ -62,7 +62,7 @@ public class PlayerConroller : MonoBehaviour
         rb.velocity = _velocity;
     }
 
-    void LateUpdate() => _lastHitDown = detect.Down;
+    void LateUpdate() => _lastDetectDown = detect.Down;
 
 #endregion
 
@@ -141,13 +141,13 @@ public class PlayerConroller : MonoBehaviour
     [Header("Detects")]
     [SerializeField] private LayerMask groundLayer;
     [SerializeField] private Detect detect;
-    private bool _lastHitDown;
+    private bool _lastDetectDown;
     [SerializeField] private CornerDetect topLeftCorner, topRightCorner;
     [SerializeField, Tooltip("No left/right corner correct if the time after press left/right within this value")] private float noCornerCorrectTime = 0.5f;
 
     private void CornerCorrect()
     {
-        // if hit head on corner -> push forward a little bit
+        // if hit head on left corner & not moving left -> push right a little bit
         if (topLeftCorner.Detected && timer.CanLeftCornerCorrect && _velocity.y > 0)
         {
             float leftBoundX = cl.bounds.center.x - cl.bounds.size.x / 2;
@@ -155,13 +155,22 @@ public class PlayerConroller : MonoBehaviour
             distance += 0.001f; // add a small value to avoid collide on edge
             tf.Translate(distance * Vector2.right);
         }
-        if (topRightCorner.Detected && timer.CanRightCornerCorrect && _velocity.y > 0)
+        // if hit head on right corner & not moving right -> push left a little bit
+        else if (topRightCorner.Detected && timer.CanRightCornerCorrect && _velocity.y > 0)
         {
             float rightBoundX = cl.bounds.center.x + cl.bounds.size.x / 2;
             float distance = rightBoundX - topRightCorner.HitPointX;
             distance += 0.001f; // add a small value to avoid collide on edge
             tf.Translate(distance * Vector2.left);
         }
+    }
+
+    private void RestrictVelocity()
+    {
+        if ((_velocity.x > 0 && detect.Right) || (_velocity.x < 0 && detect.Left))
+            _velocity.x = 0;
+        if ((_velocity.y > 0 && detect.Up && !topLeftCorner.Detected && !topRightCorner.Detected) || (_velocity.y < 0 && detect.Down))
+            _velocity.y = 0;
     }
 
 #endregion
@@ -204,18 +213,19 @@ public class PlayerConroller : MonoBehaviour
 
     private void CalculateGravity()
     {
+        // calculate gravity scale
         float scale = 1;
-
         if (_atJumpApex)
-            scale *= jumpApexGravityMult;
+            scale = jumpApexGravityMult;
         else if (_jumpCutting)
-            scale *= jumpCutGravityMult;
+            scale = jumpCutGravityMult;
 
         Debug.Assert(gravityDir.magnitude == 1f, $"gravityDir: {gravityDir} has wrong magnitude: {gravityDir.magnitude}", this);
 
         // v = v_0 + a * t
         Vector2 v = _velocity + gravity * scale * _deltaTime * gravityDir;
 
+        // limit max falling speed
         if (gravityDir.x != 0)
             v.x = Mathf.Max(v.x, maxFallSpeed * gravityDir.x);
         else
@@ -244,9 +254,9 @@ public class PlayerConroller : MonoBehaviour
     {
         float v = _velocity.y;
 
-        if ((!detect.Up || topLeftCorner.Detected || topRightCorner.Detected) &&
-            ((detect.Down && (timer.HasJumpBuffer || Input.JumpDown)) ||
-             (Input.JumpDown && !_jumping && timer.CanCoyote)))
+        // start jump
+        if (!_jumping && (!detect.Up || topLeftCorner.Detected || topRightCorner.Detected) &&
+            ( (detect.Down && (timer.HasJumpBuffer || Input.JumpDown)) || (Input.JumpDown && timer.CanCoyote) ))
         {
             v = jumpSpeed;
             _jumping = true;
@@ -264,12 +274,4 @@ public class PlayerConroller : MonoBehaviour
     }
 
 #endregion
-
-    private void RestrictVelocity()
-    {
-        if ((_velocity.x > 0 && detect.Right) || (_velocity.x < 0 && detect.Left))
-            _velocity.x = 0;
-        if ((_velocity.y > 0 && detect.Up && !topLeftCorner.Detected && !topRightCorner.Detected) || (_velocity.y < 0 && detect.Down))
-            _velocity.y = 0;
-    }
 }
