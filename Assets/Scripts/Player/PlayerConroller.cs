@@ -17,6 +17,13 @@ public class PlayerConroller : MonoBehaviour
 
     private void Update()
     {
+        if (Input.RawH < 0)
+            timer.LastPressLeft = noCornerCorrectTime;
+        if (Input.RawH > 0)
+            timer.LastPressRight = noCornerCorrectTime;
+        if (Input.JumpDown)
+            timer.LastPressJump = jumpBufferTime;
+
         CalculateJump();
     }
 
@@ -27,7 +34,6 @@ public class PlayerConroller : MonoBehaviour
         topLeftCorner.Detect(groundLayer, tf.position);
         topRightCorner.Detect(groundLayer, tf.position);
         timer.Update(_deltaTime);
-        // _velocity = rb.velocity;
 
         if (detect.Down)
         {
@@ -35,9 +41,6 @@ public class PlayerConroller : MonoBehaviour
             if (!_lastHitDown)
                 _jumping = false;
         }
-
-        if (Input.JumpDown)
-            timer.JumpBuffer = jumpBufferTime;
 
         if (detect.Down)
             timer.LastOnGround = coyoteTime;
@@ -57,6 +60,28 @@ public class PlayerConroller : MonoBehaviour
     }
 
     void LateUpdate() => _lastHitDown = detect.Down;
+
+#endregion
+
+#region Timer
+
+    [System.Serializable]
+    private struct Timer
+    {
+        public float LastPressLeft;
+        public float LastPressRight;
+        public float LastPressJump;
+        public float LastOnGround;
+        public void Update(float deltaTime)
+        {
+            LastPressLeft  -= deltaTime;
+            LastPressRight -= deltaTime;
+            LastPressJump  -= deltaTime;
+            LastOnGround   -= deltaTime;
+        }
+    }
+
+    private Timer timer;
 
 #endregion
 
@@ -102,41 +127,26 @@ public class PlayerConroller : MonoBehaviour
     [SerializeField] private LayerMask groundLayer;
     [SerializeField] private Detect detect;
     [SerializeField] private CornerDetect topLeftCorner, topRightCorner;
+    [SerializeField, Tooltip("No corner correct if the time after press left/right within this value")]
+    private float noCornerCorrectTime = 0.5f;
     private bool _lastHitDown;
 
     private void CornerCorrect()
     {
         // if hit head on corner -> push forward a little bit
-        if (topLeftCorner.Detected && Input.RawH >= 0 && _velocity.y > 0)
+        if (topLeftCorner.Detected && timer.LastPressLeft < 0 && _velocity.y > 0)
         {
             float leftBoundX = cl.bounds.center.x - cl.bounds.size.x / 2;
             float distance = topLeftCorner.HitPointX - leftBoundX;
             tf.Translate(distance * Vector2.right);
         }
-        if (topRightCorner.Detected && Input.RawH <= 0 && _velocity.y > 0)
+        if (topRightCorner.Detected && timer.LastPressRight < 0 && _velocity.y > 0)
         {
             float rightBoundX = cl.bounds.center.x + cl.bounds.size.x / 2;
             float distance = topRightCorner.HitPointX - rightBoundX;
             tf.Translate(distance * Vector2.right);
         }
     }
-
-#endregion
-
-#region Timer
-
-    [System.Serializable]
-    private struct Timer
-    {
-        public float JumpBuffer;
-        public float LastOnGround;
-        public void Update(float deltaTime)
-        {
-            JumpBuffer   -= deltaTime;
-            LastOnGround -= deltaTime;
-        }
-    }
-    private Timer timer;
 
 #endregion
 
@@ -213,7 +223,7 @@ public class PlayerConroller : MonoBehaviour
         float v = _velocity.y;
 
         if ((!detect.Up || topLeftCorner.Detected || topRightCorner.Detected) &&
-            ((detect.Down && timer.JumpBuffer > 0) ||
+            ((detect.Down && timer.LastPressJump > 0) ||
             (Input.JumpDown && !_jumping && timer.LastOnGround > 0)))
         {
             v = jumpSpeed;
